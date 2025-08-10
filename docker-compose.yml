@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  docuarch-viewer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: docuarch-knowledge-graph-viewer
+    ports:
+      - "8080:80"
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.docker.compose.project=docuarch-viewer"
+      - "com.docker.compose.service=web"
+    volumes:
+      # Optional: Mount custom configuration
+      - ./custom-data:/usr/share/nginx/html/data:ro
+    networks:
+      - docuarch-network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/run:noexec,nosuid,size=100m
+      - /var/cache/nginx:noexec,nosuid,size=50m
+      - /var/log/nginx:noexec,nosuid,size=50m
+
+  # Optional: Reverse proxy with SSL termination
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: docuarch-proxy
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - docuarch-viewer
+    networks:
+      - docuarch-network
+    profiles:
+      - ssl
+
+networks:
+  docuarch-network:
+    driver: bridge
+    name: docuarch-network
