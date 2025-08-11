@@ -1,0 +1,34 @@
+{
+  "nodes": [
+    {
+      "id": "sample-1",
+      "type": "ApplicationComponent",
+      "group": "Application",
+      "label": "Sample Node 1"
+    },
+    {
+      "id": "sample-2",
+      "type": "ApplicationService",
+      "group": "Application",
+      "label": "Sample Node 2"
+    },
+    {
+      "id": "sample-3",
+      "type": "Node",
+      "group": "Technology",
+      "label": "Sample Node 3"
+    }
+  ],
+  "edges": [
+    {
+      "to": "sample-2",
+      "from": "sample-1",
+      "label": "uses"
+    },
+    {
+      "to": "sample-3",
+      "from": "sample-2",
+      "label": "deployed on"
+    }
+  ]
+}
