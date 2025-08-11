@@ -433,13 +433,7 @@ const DraggablePanel = ({
 /**
  * Enhanced Settings Panel Component with real-time preview
  */
-const SettingsPanel = ({
-  isOpen,
-  setIsOpen,
-  onSettingsChange,
-  settings,
-  graphData,
-}) => {
+const SettingsPanel = ({ isOpen, setIsOpen, onSettingsChange, settings, graphData }) => {
   const [tempSettings, setTempSettings] = useState(settings);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -512,7 +506,7 @@ const SettingsPanel = ({
                   Layout Algorithm
                 </label>
                 <span className="text-xs text-gray-400 capitalize">
-                  {tempSettings.layout.replace(/([A-Z])/g, " $1")}
+                  {tempSettings.layout.replace(/([A-Z])/g, ' $1')}
                 </span>
               </div>
               <select
@@ -614,12 +608,7 @@ const SettingsPanel = ({
               <div className="flex justify-between">
                 <span>Density:</span>
                 <span className="font-mono">
-                  {(
-                    (graphData.edges.length /
-                      (graphData.nodes.length * (graphData.nodes.length - 1))) *
-                    100
-                  ).toFixed(1)}
-                  %
+                  {((graphData.edges.length / (graphData.nodes.length * (graphData.nodes.length - 1))) * 100).toFixed(1)}%
                 </span>
               </div>
             </div>
@@ -637,16 +626,8 @@ const SettingsPanel = ({
           </button>
           {hasUnsavedChanges && (
             <div className="flex items-center text-xs text-yellow-400">
-              <svg
-                className="w-3 h-3 mr-1"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
+              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               Live Preview
             </div>
@@ -696,18 +677,8 @@ const ZoomControls = ({ networkRef }) => {
         className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
         title="Zoom In"
       >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 4v16m8-8H4"
-          />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </button>
       <button
@@ -715,18 +686,8 @@ const ZoomControls = ({ networkRef }) => {
         className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
         title="Zoom Out"
       >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M20 12H4"
-          />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
         </svg>
       </button>
       <button
@@ -812,10 +773,7 @@ const GraphViewer = ({ graphData, onNodeSelect, networkRef, settings }) => {
     networkRef.current.on("selectNode", handleSelectNode);
     networkRef.current.on("deselectNode", handleDeselectNode);
     networkRef.current.on("stabilizationProgress", handleStabilizationProgress);
-    networkRef.current.on(
-      "stabilizationIterationsDone",
-      handleStabilizationEnd
-    );
+    networkRef.current.on("stabilizationIterationsDone", handleStabilizationEnd);
     networkRef.current.on("doubleClick", handleDoubleClick);
 
     return () => {
@@ -848,502 +806,6 @@ const GraphViewer = ({ graphData, onNodeSelect, networkRef, settings }) => {
 
       // Update network options without recreating the network
       networkRef.current.setOptions(enhancedOptions);
-
+      
       // If physics was disabled and now enabled, restart stabilization
-      if (
-        settings.physicsEnabled &&
-        networkRef.current.physics.physicsEnabled === false
-      ) {
-        networkRef.current.startSimulation();
-      }
-
-      // If physics was enabled and now disabled, stop simulation
-      if (
-        !settings.physicsEnabled &&
-        networkRef.current.physics.physicsEnabled === true
-      ) {
-        networkRef.current.stopSimulation();
-      }
-    }
-  }, [settings]);
-
-  useEffect(() => {
-    if (networkRef.current && graphData) {
-      networkRef.current.setData(graphData);
-      networkRef.current.fit();
-
-      // Enhanced stabilization with progress feedback
-      setIsStabilizing(true);
-      networkRef.current.once("stabilizationIterationsDone", () => {
-        setIsStabilizing(false);
-        if (settings.physicsEnabled) {
-          setTimeout(() => {
-            networkRef.current.setOptions({ physics: false });
-          }, 3000);
-        }
-      });
-    }
-  }, [graphData, networkRef, settings.physicsEnabled]);
-
-  return (
-    <div className="relative w-full h-full">
-      {isStabilizing && (
-        <div className="absolute top-4 right-4 z-20 bg-blue-900 bg-opacity-90 text-white px-4 py-3 rounded-lg shadow-lg">
-          <div className="flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">Stabilizing graph...</span>
-              <div className="w-32 bg-blue-800 rounded-full h-2 mt-1">
-                <div
-                  className="bg-blue-400 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${stabilizationProgress}%` }}
-                ></div>
-              </div>
-              <span className="text-xs text-blue-200 mt-1">
-                {stabilizationProgress}%
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-      <div ref={visJsRef} className="w-full h-full bg-gray-900" />
-      <ZoomControls networkRef={networkRef} />
-    </div>
-  );
-};
-
-// --- Enhanced Export Functionality ---
-const exportGraphData = (graphData, format = "json") => {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filename = `docuarch-graph-${timestamp}`;
-
-  let content, mimeType, extension;
-
-  switch (format) {
-    case "json":
-      content = JSON.stringify(graphData, null, 2);
-      mimeType = "application/json";
-      extension = "json";
-      break;
-    case "csv":
-      // Export nodes and edges as separate CSV sections
-      const nodesCsv = graphData.nodes
-        .map(
-          (node) =>
-            `"${node.id}","${node.label}","${node.type}","${node.group}","${
-              node.description || ""
-            }"`
-        )
-        .join("\n");
-      const edgesCsv = graphData.edges
-        .map(
-          (edge) =>
-            `"${edge.from}","${edge.to}","${edge.label}","${edge.type || ""}"`
-        )
-        .join("\n");
-      content = `NODES\nid,label,type,group,description\n${nodesCsv}\n\nEDGES\nfrom,to,label,type\n${edgesCsv}`;
-      mimeType = "text/csv";
-      extension = "csv";
-      break;
-    default:
-      throw new Error("Unsupported export format");
-  }
-
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${filename}.${extension}`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
-
-// --- Main Enhanced App Component ---
-export default function App() {
-  const [graphData, setGraphData] = useState(null);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
-  const [isLegendOpen, setIsLegendOpen] = useState(true);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [settings, setSettings] = useState({
-    physicsEnabled: true,
-    nodeSize: 25,
-    edgeWidth: 2,
-    layout: "barnesHut",
-  });
-
-  const fileInputRef = useRef(null);
-  const networkRef = useRef(null);
-
-  // Enhanced file handling with validation
-  const handleFileChange = useCallback(async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-
-      // Enhanced validation
-      if (!data || typeof data !== "object") {
-        throw new Error("Invalid JSON structure.");
-      }
-
-      if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-        throw new Error("JSON must contain 'nodes' and 'edges' arrays.");
-      }
-
-      // Validate node structure
-      const invalidNodes = data.nodes.filter((node) => !node.id || !node.label);
-      if (invalidNodes.length > 0) {
-        throw new Error(
-          `Invalid node structure. All nodes must have 'id' and 'label' properties.`
-        );
-      }
-
-      // Validate edge structure
-      const invalidEdges = data.edges.filter((edge) => !edge.from || !edge.to);
-      if (invalidEdges.length > 0) {
-        throw new Error(
-          `Invalid edge structure. All edges must have 'from' and 'to' properties.`
-        );
-      }
-
-      setGraphData(data);
-      setSelectedNode(null);
-      setSuccess(
-        `Successfully loaded ${data.nodes.length} nodes and ${data.edges.length} edges.`
-      );
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
-      setError(`Error loading file: ${err.message}`);
-      setGraphData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const loadSampleData = useCallback(() => {
-    setGraphData(sampleKgData);
-    setSelectedNode(null);
-    setError("");
-    setSuccess("Sample data loaded successfully.");
-    setTimeout(() => setSuccess(""), 3000);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, []);
-
-  const handleNodeSelect = useCallback((node) => {
-    setSelectedNode(node);
-  }, []);
-
-  const handleCloseDetails = useCallback(() => {
-    if (networkRef.current && selectedNode) {
-      networkRef.current.selectNodes([]);
-    }
-    setSelectedNode(null);
-  }, [selectedNode]);
-
-  const centerGraph = useCallback(() => {
-    if (networkRef.current) {
-      networkRef.current.fit({
-        animation: { duration: 1000, easingFunction: "easeInOutQuad" },
-      });
-    }
-  }, []);
-
-  const handleSettingsChange = useCallback((newSettings) => {
-    setSettings(newSettings);
-  }, []);
-
-  // Auto-clear error messages
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  return (
-    <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-sans overflow-hidden">
-      <header className="bg-gray-800 shadow-2xl z-30 border-b border-gray-700 flex-shrink-0">
-        <div className="px-4 py-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold text-white">
-                DocuArch Knowledge Graph Viewer
-              </h1>
-              <div className="text-sm text-gray-400">
-                {process.env.REACT_APP_ENVIRONMENT && (
-                  <span className="px-2 py-1 bg-blue-900 rounded text-blue-200 text-xs">
-                    {process.env.REACT_APP_ENVIRONMENT.toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {graphData && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => exportGraphData(graphData, "json")}
-                    className="p-2 rounded-md bg-green-700 hover:bg-green-600 text-white transition-colors"
-                    title="Export as JSON"
-                  >
-                    <SaveIcon />
-                  </button>
-                  <button
-                    onClick={() => exportGraphData(graphData, "csv")}
-                    className="px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 text-white text-sm transition-colors"
-                    title="Export as CSV"
-                  >
-                    CSV
-                  </button>
-                </div>
-              )}
-
-              <label
-                htmlFor="file-upload"
-                className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors shadow-md"
-              >
-                {isLoading ? "Loading..." : "Upload JSON"}
-              </label>
-              <input
-                id="file-upload"
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleFileChange}
-                className="hidden"
-                disabled={isLoading}
-              />
-
-              <button
-                onClick={loadSampleData}
-                className="bg-green-600 hover:bg-green-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors shadow-md"
-                disabled={isLoading}
-              >
-                Load Sample
-              </button>
-
-              <button
-                onClick={centerGraph}
-                className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-                title="Center Graph"
-              >
-                <CenterIcon />
-              </button>
-
-              <button
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`p-2 rounded-md transition-colors ${
-                  isSettingsOpen
-                    ? "bg-blue-700 text-white"
-                    : "bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white"
-                }`}
-                title="Graph Settings"
-              >
-                <SettingsIcon />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Enhanced notification system */}
-      {error && (
-        <div
-          className="absolute top-20 right-4 z-50 bg-red-900 border border-red-700 text-red-200 p-4 rounded-md shadow-2xl animate-fade-in max-w-md"
-          role="alert"
-        >
-          <div className="flex items-start">
-            <svg
-              className="w-5 h-5 text-red-400 mt-0.5 mr-3 flex-shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div>
-              <p className="font-bold text-sm">Error</p>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
-            <button
-              onClick={() => setError("")}
-              className="ml-4 text-red-400 hover:text-red-200"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {success && (
-        <div className="absolute top-20 right-4 z-50 bg-green-900 border border-green-700 text-green-200 p-4 rounded-md shadow-2xl animate-fade-in max-w-md">
-          <div className="flex items-start">
-            <svg
-              className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div>
-              <p className="font-bold text-sm">Success</p>
-              <p className="text-sm mt-1">{success}</p>
-            </div>
-            <button
-              onClick={() => setSuccess("")}
-              className="ml-4 text-green-400 hover:text-green-200"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <main className="flex-grow relative overflow-hidden">
-        <div className="w-full h-full">
-          {graphData ? (
-            <GraphViewer
-              graphData={graphData}
-              onNodeSelect={handleNodeSelect}
-              networkRef={networkRef}
-              settings={settings}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-900">
-              <div className="text-center text-gray-500 max-w-md">
-                <svg
-                  className="mx-auto h-20 w-20 text-gray-600 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1"
-                    d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-                  />
-                </svg>
-                <h3 className="text-xl font-medium text-gray-400 mb-2">
-                  No Graph Data Loaded
-                </h3>
-                <p className="text-gray-500 mb-4">
-                  Upload a JSON file or load the sample data to visualize your
-                  knowledge graph.
-                </p>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <p>• Supports ArchiMate and custom knowledge graph formats</p>
-                  <p>• Interactive visualization with physics simulation</p>
-                  <p>• Enterprise-ready for OneStream XF integration</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Enhanced floating panels */}
-        {graphData && (
-          <DraggablePanel
-            title="Legend"
-            initialPosition={{ x: 20, y: 20 }}
-            isOpen={isLegendOpen}
-            setIsOpen={setIsLegendOpen}
-          >
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-600 pb-1">
-                Node Types
-              </h4>
-              {Object.entries(graphOptions.groups).map(([name, properties]) => (
-                <div key={name} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <span
-                      className="w-4 h-4 rounded mr-3 border-2"
-                      style={{
-                        backgroundColor: properties.color?.background || "#fff",
-                        borderColor: properties.color?.border || "#000",
-                      }}
-                    />
-                    <span className="text-sm">{name}</span>
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    {graphData.nodes.filter((n) => n.group === name).length}
-                  </span>
-                </div>
-              ))}
-              <div className="pt-2 border-t border-gray-600 text-xs text-gray-500">
-                <p>
-                  Total: {graphData.nodes.length} nodes,{" "}
-                  {graphData.edges.length} edges
-                </p>
-              </div>
-            </div>
-          </DraggablePanel>
-        )}
-
-        {selectedNode && (
-          <DraggablePanel
-            title={`Node: ${selectedNode.label}`}
-            initialPosition={{ x: window.innerWidth - 420, y: 20 }}
-            isOpen={isDetailsOpen}
-            setIsOpen={setIsDetailsOpen}
-            onClose={handleCloseDetails}
-            minWidth={380}
-          >
-            <div className="space-y-4">
-              {Object.entries(selectedNode)
-                .filter(([key]) => key !== "x" && key !== "y") // Hide position data
-                .map(([key, value]) => (
-                  <div key={key}>
-                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
-                      {key.replace(/([A-Z])/g, " $1").trim()}
-                    </p>
-                    <div className="text-gray-200 bg-gray-700 bg-opacity-50 p-3 rounded-md text-sm font-mono">
-                      {value === null || value === undefined ? (
-                        <span className="text-gray-500 italic">
-                          Not specified
-                        </span>
-                      ) : typeof value === "object" ? (
-                        <pre className="whitespace-pre-wrap overflow-x-auto">
-                          {JSON.stringify(value, null, 2)}
-                        </pre>
-                      ) : (
-                        <span className="break-words">{value.toString()}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </DraggablePanel>
-        )}
-
-        <SettingsPanel
-          isOpen={isSettingsOpen}
-          setIsOpen={setIsSettingsOpen}
-          onSettingsChange={handleSettingsChange}
-          settings={settings}
-          graphData={graphData}
-        />
-      </main>
-    </div>
-  );
-}
+      if (settings.physicsEnabled && networkRef.current.physics.phys

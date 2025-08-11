@@ -1,0 +1,298 @@
+{
+  "@context": {
+    "archimate": "http://www.opengroup.org/xsd/archimate",
+    "name": "archimate:name",
+    "type": "@type",
+    "id": "@id",
+    "relatesTo": {
+      "@id": "archimate:relatesTo",
+      "@type": "@id"
+    },
+    "compliance": "archimate:compliance"
+  },
+  "@graph": [
+    {
+      "id": "BR1",
+      "type": "archimate:BusinessRole",
+      "name": "Education Systems Developer"
+    },
+    {
+      "id": "BP1",
+      "type": "archimate:BusinessProcess",
+      "name": "Lab Provisioning",
+      "relatesTo": "BR1"
+    },
+    {
+      "id": "BP2",
+      "type": "archimate:BusinessProcess",
+      "name": "Lab Publishing",
+      "relatesTo": "BR1"
+    },
+    {
+      "id": "BP3",
+      "type": "archimate:BusinessProcess",
+      "name": "Compliance Review",
+      "relatesTo": "BR1"
+    },
+    {
+      "id": "BP4",
+      "type": "archimate:BusinessProcess",
+      "name": "Lab Series Authoring",
+      "relatesTo": "BR1"
+    },
+    {
+      "id": "BP5",
+      "type": "archimate:BusinessProcess",
+      "name": "UAT Approval",
+      "relatesTo": "BR1"
+    },
+    {
+      "id": "BO1",
+      "type": "archimate:BusinessObject",
+      "name": "Training Lab Template"
+    },
+    {
+      "id": "BO2",
+      "type": "archimate:BusinessObject",
+      "name": "Compliance Audit Summary"
+    },
+    {
+      "id": "BO3",
+      "type": "archimate:BusinessObject",
+      "name": "Lab Series Package"
+    },
+    {
+      "id": "BG1",
+      "type": "archimate:BusinessGoal",
+      "name": "Secure, compliant, automated lab delivery"
+    },
+    {
+      "id": "AC1",
+      "type": "archimate:ApplicationComponent",
+      "name": "Skillable Studio"
+    },
+    {
+      "id": "AC2",
+      "type": "archimate:ApplicationComponent",
+      "name": "Skillable TMS"
+    },
+    {
+      "id": "AC3",
+      "type": "archimate:ApplicationComponent",
+      "name": "OneStream Navigator"
+    },
+    {
+      "id": "AC4",
+      "type": "archimate:ApplicationComponent",
+      "name": "DocuArch-AI"
+    },
+    {
+      "id": "AS1",
+      "type": "archimate:ApplicationService",
+      "name": "Lab Publishing Service"
+    },
+    {
+      "id": "AS2",
+      "type": "archimate:ApplicationService",
+      "name": "Audit Export Service"
+    },
+    {
+      "id": "AS3",
+      "type": "archimate:ApplicationService",
+      "name": "Lab Series Publishing Service"
+    },
+    {
+      "id": "DO1",
+      "type": "archimate:DataObject",
+      "name": "VM Image Metadata"
+    },
+    {
+      "id": "DO2",
+      "type": "archimate:DataObject",
+      "name": "Audit Logs"
+    },
+    {
+      "id": "DO3",
+      "type": "archimate:DataObject",
+      "name": "Lab Series Package"
+    },
+    {
+      "id": "TN1",
+      "type": "archimate:TechnologyNode",
+      "name": "Hyper-V Host"
+    },
+    {
+      "id": "TN2",
+      "type": "archimate:TechnologyNode",
+      "name": "Azure Subscription"
+    },
+    {
+      "id": "SW1",
+      "type": "archimate:SystemSoftware",
+      "name": "Windows Server 2022"
+    },
+    {
+      "id": "SW2",
+      "type": "archimate:SystemSoftware",
+      "name": "PowerShell DSC"
+    },
+    {
+      "id": "ART1",
+      "type": "archimate:Artifact",
+      "name": "VHD Template"
+    },
+    {
+      "id": "ART2",
+      "type": "archimate:Artifact",
+      "name": "DSC Script"
+    },
+    {
+      "id": "ART3",
+      "type": "archimate:Artifact",
+      "name": "Audit Markdown"
+    },
+    {
+      "id": "ART4",
+      "type": "archimate:Artifact",
+      "name": "SCORM Metadata"
+    },
+    {
+      "id": "ART5",
+      "type": "archimate:Artifact",
+      "name": "UAT Log"
+    },
+    {
+      "id": "R1",
+      "type": "archimate:Association",
+      "relatesTo": ["BP1", "BO1"]
+    },
+    {
+      "id": "R2",
+      "type": "archimate:Association",
+      "relatesTo": ["BP2", "BO1"]
+    },
+    {
+      "id": "R3",
+      "type": "archimate:Association",
+      "relatesTo": ["BP3", "BO2"]
+    },
+    {
+      "id": "R4",
+      "type": "archimate:Association",
+      "relatesTo": ["BP4", "BO3"]
+    },
+    {
+      "id": "R5",
+      "type": "archimate:Association",
+      "relatesTo": ["BP5", "BO3"]
+    },
+    {
+      "id": "R6",
+      "type": "archimate:Association",
+      "relatesTo": ["BP2", "AS1"]
+    },
+    {
+      "id": "R7",
+      "type": "archimate:Association",
+      "relatesTo": ["BP3", "AS2"]
+    },
+    {
+      "id": "R8",
+      "type": "archimate:Association",
+      "relatesTo": ["AS1", "AC2"]
+    },
+    {
+      "id": "R9",
+      "type": "archimate:Association",
+      "relatesTo": ["AS1", "AC3"]
+    },
+    {
+      "id": "R10",
+      "type": "archimate:Association",
+      "relatesTo": ["AS2", "AC4"]
+    },
+    {
+      "id": "R11",
+      "type": "archimate:Association",
+      "relatesTo": ["AS3", "AC2"]
+    },
+    {
+      "id": "R12",
+      "type": "archimate:Association",
+      "relatesTo": ["AS3", "AC3"]
+    },
+    {
+      "id": "R13",
+      "type": "archimate:Association",
+      "relatesTo": ["AC1", "DO3"]
+    },
+    {
+      "id": "R14",
+      "type": "archimate:Association",
+      "relatesTo": ["AC2", "DO1"]
+    },
+    {
+      "id": "R15",
+      "type": "archimate:Association",
+      "relatesTo": ["AC3", "DO1"]
+    },
+    {
+      "id": "R16",
+      "type": "archimate:Association",
+      "relatesTo": ["AC4", "DO2"]
+    },
+    {
+      "id": "R17",
+      "type": "archimate:Association",
+      "relatesTo": ["TN1", "SW1"]
+    },
+    {
+      "id": "R18",
+      "type": "archimate:Association",
+      "relatesTo": ["TN2", "SW2"]
+    },
+    {
+      "id": "R19",
+      "type": "archimate:Association",
+      "relatesTo": ["SW1", "ART1"]
+    },
+    {
+      "id": "R20",
+      "type": "archimate:Association",
+      "relatesTo": ["SW2", "ART2"]
+    },
+    {
+      "id": "R21",
+      "type": "archimate:Association",
+      "relatesTo": ["AC4", "ART3"]
+    },
+    {
+      "id": "R22",
+      "type": "archimate:Association",
+      "relatesTo": ["AC1", "ART4"]
+    },
+    {
+      "id": "R23",
+      "type": "archimate:Association",
+      "relatesTo": ["AC1", "ART5"]
+    },
+    {
+      "id": "CM1",
+      "type": "archimate:Compliance",
+      "name": "GDPR",
+      "relatesTo": ["DO1", "DO2"]
+    },
+    {
+      "id": "CM2",
+      "type": "archimate:Compliance",
+      "name": "ISO 27001",
+      "relatesTo": ["ART2", "DO2"]
+    },
+    {
+      "id": "CM3",
+      "type": "archimate:Compliance",
+      "name": "NIST SP 800-53",
+      "relatesTo": ["ART2", "ART3", "ART4"]
+    }
+  ]
+}

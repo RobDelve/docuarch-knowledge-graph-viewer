@@ -61,6 +61,7 @@ body {
     border-radius: 6px !important;
     padding: 8px 12px !important;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
     backdrop-filter: blur(4px) !important;
 }
 
@@ -167,6 +168,58 @@ input[type="file"]::-webkit-file-upload-button {
 /* Custom utility classes */
 .glass-effect {
     background: rgba(45, 55, 72, 0.8);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Custom utility classes */
+.glass-effect {
+    background: rgba(45, 55, 72, 0.8);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced slider styling */
+.slider {
+    background: linear-gradient(90deg, #4a5568 0%, #63b3ed 100%);
+}
+
+.slider::-webkit-slider-thumb {
+    appearance: none;
+    height: 18px;
+    width: 18px;
+    background: #63b3ed;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+    background: #90cdf4;
+    transform: scale(1.1);
+}
+
+.slider::-moz-range-thumb {
+    height: 18px;
+    width: 18px;
+    background: #63b3ed;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+    background: #90cdf4;
+    transform: scale(1.1);
+}
+
+/* Smooth transitions for settings changes */
+.settings-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
