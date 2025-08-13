@@ -2,36 +2,287 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Network } from "vis-network/esnext";
 import "vis-network/styles/vis-network.css";
 
-// --- Helper Icons ---
-const SidebarIcon = ({ open }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    {open ? (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M17 8l4 4m0 0l-4 4m4-4H3"
-      />
-    ) : (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 6h16M4 12h16M4 18h16"
-      />
-    )}
-  </svg>
-);
+// JSON-LD Knowledge Graph Processor
+class JSONLDProcessor {
+  constructor() {
+    this.prefixes = new Map();
+    this.context = {};
+  }
 
+  processContext(context) {
+    if (!context) return;
+
+    Object.entries(context).forEach(([key, value]) => {
+      if (key === "@vocab" || key === "@base") return;
+
+      if (typeof value === "string") {
+        this.prefixes.set(key, value);
+      } else if (typeof value === "object") {
+        this.context[key] = value;
+      }
+    });
+  }
+
+  expandIRI(compactIRI) {
+    if (!compactIRI || typeof compactIRI !== "string") return compactIRI;
+
+    if (compactIRI.includes("http://") || compactIRI.includes("https://")) {
+      return compactIRI;
+    }
+
+    const [prefix, localName] = compactIRI.split(":", 2);
+    if (localName && this.prefixes.has(prefix)) {
+      return (
+        this.prefixes.get(prefix) +
+        (localName.startsWith("/") ? localName : "/" + localName)
+      );
+    }
+
+    return compactIRI;
+  }
+
+  getLocalName(iri) {
+    if (!iri || typeof iri !== "string") return iri;
+
+    if (iri.includes(":") && !iri.includes("http")) {
+      return iri.split(":").pop();
+    }
+
+    return iri.split("/").pop().split("#").pop();
+  }
+
+  getNodeGroup(type) {
+    if (!type) return "Other";
+
+    const localType = this.getLocalName(type).toLowerCase();
+
+    if (localType.includes("business")) return "Business";
+    if (localType.includes("application")) return "Application";
+    if (
+      localType.includes("technology") ||
+      localType.includes("system") ||
+      localType.includes("artifact") ||
+      localType.includes("node")
+    )
+      return "Technology";
+    if (localType.includes("data") || localType.includes("object"))
+      return "Data";
+    if (
+      localType.includes("goal") ||
+      localType.includes("principle") ||
+      localType.includes("requirement")
+    )
+      return "Motivation";
+    if (localType.includes("compliance") || localType.includes("constraint"))
+      return "Compliance";
+    if (
+      localType.includes("person") ||
+      localType.includes("actor") ||
+      localType.includes("role")
+    )
+      return "Actors";
+    if (
+      localType.includes("process") ||
+      localType.includes("function") ||
+      localType.includes("service")
+    )
+      return "Processes";
+    if (localType.includes("component") || localType.includes("module"))
+      return "Components";
+
+    return "Other";
+  }
+
+  processJSONLD(jsonldData) {
+    this.processContext(jsonldData["@context"]);
+
+    const nodes = [];
+    const edges = [];
+    const nodeMap = new Map();
+
+    const graphData = jsonldData["@graph"] || [jsonldData];
+
+    // First pass: Create all nodes
+    graphData.forEach((item) => {
+      if (!item || typeof item !== "object") return;
+
+      const id = item["@id"] || item.id;
+      if (!id) return;
+
+      const type = item["@type"] || item.type;
+      const name =
+        item.name || item.label || item.title || this.getLocalName(id);
+
+      const node = {
+        id: id,
+        label: name,
+        type: this.getLocalName(type),
+        group: this.getNodeGroup(type),
+        description: item.description || `${this.getLocalName(type)} entity`,
+        originalType: type,
+        expandedType: this.expandIRI(type),
+      };
+
+      Object.keys(item).forEach((key) => {
+        if (
+          !["@id", "@type", "id", "type", "name", "label", "title"].includes(
+            key
+          )
+        ) {
+          node[key] = item[key];
+        }
+      });
+
+      nodes.push(node);
+      nodeMap.set(id, node);
+    });
+
+    // Second pass: Create edges from relationships
+    graphData.forEach((item) => {
+      if (!item || typeof item !== "object") return;
+
+      const sourceId = item["@id"] || item.id;
+      if (!sourceId) return;
+
+      Object.entries(item).forEach(([property, value]) => {
+        if (
+          [
+            "@id",
+            "@type",
+            "id",
+            "type",
+            "name",
+            "label",
+            "title",
+            "description",
+          ].includes(property)
+        ) {
+          return;
+        }
+
+        this.extractRelationships(sourceId, property, value, edges, nodeMap);
+      });
+    });
+
+    // Third pass: Handle explicit relationship objects
+    graphData.forEach((item) => {
+      if (!item || typeof item !== "object") return;
+
+      const type = item["@type"] || item.type;
+      const id = item["@id"] || item.id;
+
+      if (
+        type &&
+        (this.getLocalName(type).toLowerCase().includes("association") ||
+          this.getLocalName(type).toLowerCase().includes("relationship") ||
+          this.getLocalName(type).toLowerCase().includes("compliance"))
+      ) {
+        const relatesTo =
+          item.relatesTo || item.relates || item.connects || item.links;
+        const label = item.name || this.getLocalName(type);
+
+        if (Array.isArray(relatesTo)) {
+          for (let i = 0; i < relatesTo.length - 1; i++) {
+            for (let j = i + 1; j < relatesTo.length; j++) {
+              edges.push({
+                from: relatesTo[i],
+                to: relatesTo[j],
+                label: label,
+                type: this.getLocalName(type),
+                relationshipId: id,
+              });
+            }
+          }
+        } else if (relatesTo) {
+          const sourceNode = nodes.find((n) => n.id === id);
+          if (sourceNode) {
+            edges.push({
+              from: id,
+              to: relatesTo,
+              label: label,
+              type: this.getLocalName(type),
+            });
+          }
+        }
+      }
+    });
+
+    return {
+      nodes: nodes.filter((node) => nodeMap.has(node.id)),
+      edges: edges.filter(
+        (edge) =>
+          nodeMap.has(edge.from) &&
+          nodeMap.has(edge.to) &&
+          edge.from !== edge.to
+      ),
+      metadata: {
+        source: "JSON-LD",
+        format: this.detectFormat(jsonldData),
+        totalNodes: nodes.length,
+        totalEdges: edges.length,
+        prefixes: Array.from(this.prefixes.entries()),
+        processedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  extractRelationships(sourceId, property, value, edges, nodeMap) {
+    const propertyLocal = this.getLocalName(property);
+
+    if (
+      ["description", "comment", "documentation"].includes(
+        propertyLocal.toLowerCase()
+      )
+    ) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        this.extractRelationships(sourceId, property, item, edges, nodeMap);
+      });
+      return;
+    }
+
+    if (typeof value === "object" && value !== null && value["@id"]) {
+      value = value["@id"];
+    }
+
+    if (typeof value === "string" && nodeMap.has(value)) {
+      edges.push({
+        from: sourceId,
+        to: value,
+        label: propertyLocal,
+        type: "relationship",
+        property: property,
+      });
+    }
+  }
+
+  detectFormat(data) {
+    const context = data["@context"];
+    if (!context) return "Generic JSON-LD";
+
+    if (typeof context === "object" && context !== null) {
+      for (const key in context) {
+        if (key.toLowerCase().includes("archimate")) return "ArchiMate JSON-LD";
+        if (key.toLowerCase().includes("schema")) return "Schema.org JSON-LD";
+      }
+      if (context.owl || context.rdf) return "RDF/OWL JSON-LD";
+    }
+
+    if (typeof context === "string" && context.includes("schema.org"))
+      return "Schema.org JSON-LD";
+
+    return "Custom JSON-LD";
+  }
+}
+
+// --- Helper Icons ---
 const CloseIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className="h-6 w-6"
+    className="h-4 w-4"
     fill="none"
     viewBox="0 0 24 24"
     stroke="currentColor"
@@ -272,17 +523,45 @@ const graphOptions = {
     multiselect: true,
   },
   groups: {
-    Application: {
+    Business: {
       color: { background: "#4a3a2a", border: "#d69e2e" },
       font: { color: "#faf089" },
     },
-    Technology: {
+    Application: {
       color: { background: "#2a4a3a", border: "#38a169" },
       font: { color: "#9ae6b4" },
     },
-    Business: {
-      color: { background: "#3a2a4a", border: "#805ad5" },
-      font: { color: "#d6bcfa" },
+    Technology: {
+      color: { background: "#2a3a4a", border: "#4299e1" },
+      font: { color: "#90cdf4" },
+    },
+    Data: {
+      color: { background: "#4a2a4a", border: "#9f7aea" },
+      font: { color: "#ddd6fe" },
+    },
+    Motivation: {
+      color: { background: "#4a4a2a", border: "#ed8936" },
+      font: { color: "#fbb040" },
+    },
+    Compliance: {
+      color: { background: "#4a2a2a", border: "#e53e3e" },
+      font: { color: "#fbb6b6" },
+    },
+    Actors: {
+      color: { background: "#3a4a3a", border: "#48bb78" },
+      font: { color: "#9ae6b4" },
+    },
+    Processes: {
+      color: { background: "#3a3a4a", border: "#667eea" },
+      font: { color: "#a3bffa" },
+    },
+    Components: {
+      color: { background: "#3a4a4a", border: "#38b2ac" },
+      font: { color: "#81e6d9" },
+    },
+    Other: {
+      color: { background: "#2d3748", border: "#4a5568" },
+      font: { color: "#e2e8f0" },
     },
   },
 };
@@ -308,8 +587,13 @@ const DraggablePanel = ({
   const panelRef = useRef(null);
 
   const handleMouseDown = useCallback((e) => {
-    if (e.target.closest("button") || e.target.closest("input")) return;
-
+    if (
+      e.target.closest("button") ||
+      e.target.closest("input") ||
+      e.target.closest("a") ||
+      e.target.closest("details")
+    )
+      return;
     setIsDragging(true);
     const panelRect = panelRef.current.getBoundingClientRect();
     dragStartPos.current = {
@@ -322,32 +606,27 @@ const DraggablePanel = ({
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return;
-
       const newX = e.clientX - dragStartPos.current.x;
       const newY = e.clientY - dragStartPos.current.y;
-
-      // Keep panel within viewport bounds
       const maxX = window.innerWidth - (panelRef.current?.offsetWidth || 300);
       const maxY = window.innerHeight - (panelRef.current?.offsetHeight || 200);
-
       setPosition({
         x: Math.max(0, Math.min(newX, maxX)),
         y: Math.max(0, Math.min(newY, maxY)),
       });
     };
-
     const handleMouseUp = () => setIsDragging(false);
-
     if (isDragging) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     }
-
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging]);
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -389,27 +668,6 @@ const DraggablePanel = ({
               />
             </svg>
           </button>
-          <button
-            className="p-1 rounded hover:bg-gray-600 transition-colors"
-            onClick={() => setIsOpen(!isOpen)}
-            title={isOpen ? "Collapse" : "Expand"}
-          >
-            <svg
-              className={`w-4 h-4 transition-transform duration-300 ${
-                isOpen ? "" : "rotate-90"
-              }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
           {onClose && (
             <button
               className="p-1 rounded hover:bg-red-600 transition-colors"
@@ -421,7 +679,7 @@ const DraggablePanel = ({
           )}
         </div>
       </div>
-      {isOpen && !isMinimized && (
+      {!isMinimized && (
         <div className="p-4 bg-gray-800 bg-opacity-30 rounded-b-lg overflow-auto max-h-96">
           {children}
         </div>
@@ -441,18 +699,13 @@ const SettingsPanel = ({
   graphData,
 }) => {
   const [tempSettings, setTempSettings] = useState(settings);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Sync temp settings when props change
   useEffect(() => {
     setTempSettings(settings);
-    setHasUnsavedChanges(false);
   }, [settings]);
 
   const handleTempChange = (newSettings) => {
     setTempSettings(newSettings);
-    setHasUnsavedChanges(true);
-    // Apply changes immediately for real-time preview
     onSettingsChange(newSettings);
   };
 
@@ -471,7 +724,7 @@ const SettingsPanel = ({
   return (
     <DraggablePanel
       title="Graph Settings"
-      initialPosition={{ x: window.innerWidth - 350, y: 100 }}
+      initialPosition={{ x: window.innerWidth - 370, y: 20 }}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
       onClose={() => setIsOpen(false)}
@@ -505,7 +758,6 @@ const SettingsPanel = ({
                 )}
               </div>
             </div>
-
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-300">
@@ -559,12 +811,7 @@ const SettingsPanel = ({
                 }
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
               />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Small</span>
-                <span>Large</span>
-              </div>
             </div>
-
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-300">
@@ -588,10 +835,6 @@ const SettingsPanel = ({
                 }
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
               />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Thin</span>
-                <span>Thick</span>
-              </div>
             </div>
           </div>
         </div>
@@ -611,17 +854,20 @@ const SettingsPanel = ({
                 <span>Edges:</span>
                 <span className="font-mono">{graphData.edges.length}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Density:</span>
-                <span className="font-mono">
-                  {(
-                    (graphData.edges.length /
-                      (graphData.nodes.length * (graphData.nodes.length - 1))) *
-                    100
-                  ).toFixed(1)}
-                  %
-                </span>
-              </div>
+              {graphData.nodes.length > 1 && (
+                <div className="flex justify-between">
+                  <span>Density:</span>
+                  <span className="font-mono">
+                    {(
+                      (graphData.edges.length /
+                        (graphData.nodes.length *
+                          (graphData.nodes.length - 1))) *
+                      100
+                    ).toFixed(1)}
+                    %
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -635,22 +881,6 @@ const SettingsPanel = ({
           >
             Reset Defaults
           </button>
-          {hasUnsavedChanges && (
-            <div className="flex items-center text-xs text-yellow-400">
-              <svg
-                className="w-3 h-3 mr-1"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Live Preview
-            </div>
-          )}
         </div>
       </div>
     </DraggablePanel>
@@ -663,9 +893,8 @@ const SettingsPanel = ({
 const ZoomControls = ({ networkRef }) => {
   const zoomIn = useCallback(() => {
     if (networkRef.current) {
-      const scale = networkRef.current.getScale();
       networkRef.current.moveTo({
-        scale: Math.min(scale * 1.2, 3),
+        scale: networkRef.current.getScale() * 1.2,
         animation: { duration: 300, easingFunction: "easeInOutQuad" },
       });
     }
@@ -673,9 +902,8 @@ const ZoomControls = ({ networkRef }) => {
 
   const zoomOut = useCallback(() => {
     if (networkRef.current) {
-      const scale = networkRef.current.getScale();
       networkRef.current.moveTo({
-        scale: Math.max(scale * 0.8, 0.1),
+        scale: networkRef.current.getScale() * 0.8,
         animation: { duration: 300, easingFunction: "easeInOutQuad" },
       });
     }
@@ -751,66 +979,37 @@ const GraphViewer = ({ graphData, onNodeSelect, networkRef, settings }) => {
   useEffect(() => {
     if (!visJsRef.current) return;
 
-    // Apply settings to graph options
-    const enhancedOptions = {
-      ...graphOptions,
-      physics: {
-        ...graphOptions.physics,
-        enabled: settings.physicsEnabled,
-        solver: settings.layout,
-      },
-      nodes: {
-        ...graphOptions.nodes,
-        size: settings.nodeSize,
-      },
-      edges: {
-        ...graphOptions.edges,
-        width: settings.edgeWidth,
-      },
-    };
-
+    const enhancedOptions = { ...graphOptions };
     networkRef.current = new Network(visJsRef.current, {}, enhancedOptions);
 
-    // Enhanced event handlers
     const handleSelectNode = (params) => {
       if (params.nodes.length > 0) {
         const nodeId = params.nodes[0];
         const node = networkRef.current.body.data.nodes.get(nodeId);
         onNodeSelect(node);
+      } else {
+        onNodeSelect(null);
       }
     };
-
-    const handleDeselectNode = () => onNodeSelect(null);
-
-    const handleStabilizationStart = () => {
-      setIsStabilizing(true);
-      setStabilizationProgress(0);
-    };
-
-    const handleStabilizationProgress = (params) => {
-      const progress = Math.round((params.iterations / params.total) * 100);
-      setStabilizationProgress(progress);
-    };
-
+    const handleStabilizationProgress = (params) =>
+      setStabilizationProgress(
+        Math.round((params.iterations / params.total) * 100)
+      );
     const handleStabilizationEnd = () => {
       setIsStabilizing(false);
       setStabilizationProgress(100);
       setTimeout(() => setStabilizationProgress(0), 1000);
     };
-
-    // Double-click to focus on node
     const handleDoubleClick = (params) => {
       if (params.nodes.length > 0) {
-        const nodeId = params.nodes[0];
-        networkRef.current.focus(nodeId, {
+        networkRef.current.focus(params.nodes[0], {
           scale: 1.5,
           animation: { duration: 1000, easingFunction: "easeInOutQuad" },
         });
       }
     };
 
-    networkRef.current.on("selectNode", handleSelectNode);
-    networkRef.current.on("deselectNode", handleDeselectNode);
+    networkRef.current.on("select", handleSelectNode);
     networkRef.current.on("stabilizationProgress", handleStabilizationProgress);
     networkRef.current.on(
       "stabilizationIterationsDone",
@@ -824,70 +1023,35 @@ const GraphViewer = ({ graphData, onNodeSelect, networkRef, settings }) => {
         networkRef.current = null;
       }
     };
-  }, [networkRef, onNodeSelect, settings]);
+  }, [networkRef, onNodeSelect]);
 
-  // Apply settings changes to existing network
   useEffect(() => {
     if (networkRef.current) {
-      const enhancedOptions = {
-        ...graphOptions,
-        physics: {
-          ...graphOptions.physics,
-          enabled: settings.physicsEnabled,
-          solver: settings.layout,
-        },
-        nodes: {
-          ...graphOptions.nodes,
-          size: settings.nodeSize,
-        },
-        edges: {
-          ...graphOptions.edges,
-          width: settings.edgeWidth,
-        },
+      const optionsToUpdate = {
+        physics: { enabled: settings.physicsEnabled, solver: settings.layout },
+        nodes: { size: settings.nodeSize },
+        edges: { width: settings.edgeWidth },
       };
-
-      // Update network options without recreating the network
-      networkRef.current.setOptions(enhancedOptions);
-
-      // If physics was disabled and now enabled, restart stabilization
-      if (
-        settings.physicsEnabled &&
-        networkRef.current.physics.physicsEnabled === false
-      ) {
+      networkRef.current.setOptions(optionsToUpdate);
+      if (settings.physicsEnabled) {
         networkRef.current.startSimulation();
-      }
-
-      // If physics was enabled and now disabled, stop simulation
-      if (
-        !settings.physicsEnabled &&
-        networkRef.current.physics.physicsEnabled === true
-      ) {
+      } else {
         networkRef.current.stopSimulation();
       }
     }
-  }, [settings]);
+  }, [settings, networkRef]);
 
   useEffect(() => {
     if (networkRef.current && graphData) {
+      setIsStabilizing(true);
       networkRef.current.setData(graphData);
       networkRef.current.fit();
-
-      // Enhanced stabilization with progress feedback
-      setIsStabilizing(true);
-      networkRef.current.once("stabilizationIterationsDone", () => {
-        setIsStabilizing(false);
-        if (settings.physicsEnabled) {
-          setTimeout(() => {
-            networkRef.current.setOptions({ physics: false });
-          }, 3000);
-        }
-      });
     }
-  }, [graphData, networkRef, settings.physicsEnabled]);
+  }, [graphData, networkRef]);
 
   return (
     <div className="relative w-full h-full">
-      {isStabilizing && (
+      {isStabilizing && stabilizationProgress < 100 && (
         <div className="absolute top-4 right-4 z-20 bg-blue-900 bg-opacity-90 text-white px-4 py-3 rounded-lg shadow-lg">
           <div className="flex items-center space-x-3">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -916,7 +1080,6 @@ const GraphViewer = ({ graphData, onNodeSelect, networkRef, settings }) => {
 const exportGraphData = (graphData, format = "json") => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `docuarch-graph-${timestamp}`;
-
   let content, mimeType, extension;
 
   switch (format) {
@@ -926,46 +1089,46 @@ const exportGraphData = (graphData, format = "json") => {
       extension = "json";
       break;
     case "csv":
-      // Export nodes and edges as separate CSV sections
-      const nodesCsv = graphData.nodes
-        .map(
-          (node) =>
-            `"${node.id}","${node.label}","${node.type}","${node.group}","${
-              node.description || ""
-            }"`
-        )
-        .join("\n");
-      const edgesCsv = graphData.edges
-        .map(
-          (edge) =>
-            `"${edge.from}","${edge.to}","${edge.label}","${edge.type || ""}"`
-        )
-        .join("\n");
-      content = `NODES\nid,label,type,group,description\n${nodesCsv}\n\nEDGES\nfrom,to,label,type\n${edgesCsv}`;
+      const nodesCsv =
+        "id,label,type,group,description\n" +
+        graphData.nodes
+          .map(
+            (n) =>
+              `"${n.id}","${n.label}","${n.type}","${n.group}","${
+                n.description || ""
+              }"`
+          )
+          .join("\n");
+      const edgesCsv =
+        "from,to,label,type\n" +
+        graphData.edges
+          .map((e) => `"${e.from}","${e.to}","${e.label}","${e.type || ""}"`)
+          .join("\n");
+      content = `NODES\n${nodesCsv}\n\nEDGES\n${edgesCsv}`;
       mimeType = "text/csv";
       extension = "csv";
       break;
     default:
-      throw new Error("Unsupported export format");
+      console.error("Unsupported export format");
+      return;
   }
 
   const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = url;
+  link.href = URL.createObjectURL(blob);
   link.download = `${filename}.${extension}`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(link.href);
 };
 
 // --- Main Enhanced App Component ---
 export default function App() {
   const [graphData, setGraphData] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
   const [isLegendOpen, setIsLegendOpen] = useState(true);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -980,56 +1143,54 @@ export default function App() {
   const fileInputRef = useRef(null);
   const networkRef = useRef(null);
 
-  // Enhanced file handling with validation
   const handleFileChange = useCallback(async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     setIsLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const text = await file.text();
-      const data = JSON.parse(text);
+      const rawData = JSON.parse(text);
+      let data;
 
-      // Enhanced validation
-      if (!data || typeof data !== "object") {
-        throw new Error("Invalid JSON structure.");
-      }
-
-      if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-        throw new Error("JSON must contain 'nodes' and 'edges' arrays.");
-      }
-
-      // Validate node structure
-      const invalidNodes = data.nodes.filter((node) => !node.id || !node.label);
-      if (invalidNodes.length > 0) {
+      if (rawData["@context"] || rawData["@graph"]) {
+        const processor = new JSONLDProcessor();
+        data = processor.processJSONLD(rawData);
+      } else if (Array.isArray(rawData.nodes) && Array.isArray(rawData.edges)) {
+        data = rawData;
+      } else {
         throw new Error(
-          `Invalid node structure. All nodes must have 'id' and 'label' properties.`
+          "Unsupported JSON format. Please use JSON-LD or a format with 'nodes' and 'edges' arrays."
         );
       }
 
-      // Validate edge structure
-      const invalidEdges = data.edges.filter((edge) => !edge.from || !edge.to);
-      if (invalidEdges.length > 0) {
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges))
+        throw new Error("Processing failed to produce valid graph data.");
+      if (data.nodes.some((n) => !n.id || !n.label))
         throw new Error(
-          `Invalid edge structure. All edges must have 'from' and 'to' properties.`
+          "Invalid node data: all nodes must have an 'id' and 'label'."
         );
-      }
+      if (data.edges.some((e) => !e.from || !e.to))
+        throw new Error(
+          "Invalid edge data: all edges must have a 'from' and 'to' property."
+        );
 
       setGraphData(data);
       setSelectedNode(null);
-      setSuccess(
-        `Successfully loaded ${data.nodes.length} nodes and ${data.edges.length} edges.`
-      );
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
+      const successMsg =
+        data.metadata?.source === "JSON-LD"
+          ? `Loaded ${data.metadata.format}: ${data.nodes.length} nodes, ${data.edges.length} edges.`
+          : `Loaded ${data.nodes.length} nodes and ${data.edges.length} edges.`;
+      setSuccess(successMsg);
     } catch (err) {
       setError(`Error loading file: ${err.message}`);
       setGraphData(null);
     } finally {
       setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, []);
 
@@ -1038,12 +1199,11 @@ export default function App() {
     setSelectedNode(null);
     setError("");
     setSuccess("Sample data loaded successfully.");
-    setTimeout(() => setSuccess(""), 3000);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
   const handleNodeSelect = useCallback((node) => {
     setSelectedNode(node);
+    setIsDetailsOpen(!!node);
   }, []);
 
   const handleCloseDetails = useCallback(() => {
@@ -1051,6 +1211,7 @@ export default function App() {
       networkRef.current.selectNodes([]);
     }
     setSelectedNode(null);
+    setIsDetailsOpen(false);
   }, [selectedNode]);
 
   const centerGraph = useCallback(() => {
@@ -1061,11 +1222,6 @@ export default function App() {
     }
   }, []);
 
-  const handleSettingsChange = useCallback((newSettings) => {
-    setSettings(newSettings);
-  }, []);
-
-  // Auto-clear error messages
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(""), 5000);
@@ -1073,24 +1229,21 @@ export default function App() {
     }
   }, [error]);
 
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-sans overflow-hidden">
       <header className="bg-gray-800 shadow-2xl z-30 border-b border-gray-700 flex-shrink-0">
         <div className="px-4 py-3">
           <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold text-white">
-                DocuArch Knowledge Graph Viewer
-              </h1>
-              <div className="text-sm text-gray-400">
-                {process.env.REACT_APP_ENVIRONMENT && (
-                  <span className="px-2 py-1 bg-blue-900 rounded text-blue-200 text-xs">
-                    {process.env.REACT_APP_ENVIRONMENT.toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-
+            <h1 className="text-xl font-bold text-white">
+              DocuArch Knowledge Graph Viewer
+            </h1>
             <div className="flex items-center gap-3">
               {graphData && (
                 <div className="flex items-center gap-2">
@@ -1110,7 +1263,6 @@ export default function App() {
                   </button>
                 </div>
               )}
-
               <label
                 htmlFor="file-upload"
                 className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors shadow-md"
@@ -1121,12 +1273,11 @@ export default function App() {
                 id="file-upload"
                 ref={fileInputRef}
                 type="file"
-                accept=".json"
+                accept=".json,.jsonld"
                 onChange={handleFileChange}
                 className="hidden"
                 disabled={isLoading}
               />
-
               <button
                 onClick={loadSampleData}
                 className="bg-green-600 hover:bg-green-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors shadow-md"
@@ -1134,7 +1285,6 @@ export default function App() {
               >
                 Load Sample
               </button>
-
               <button
                 onClick={centerGraph}
                 className="p-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
@@ -1142,7 +1292,6 @@ export default function App() {
               >
                 <CenterIcon />
               </button>
-
               <button
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                 className={`p-2 rounded-md transition-colors ${
@@ -1159,59 +1308,51 @@ export default function App() {
         </div>
       </header>
 
-      {/* Enhanced notification system */}
-      {error && (
+      {(error || success) && (
         <div
-          className="absolute top-20 right-4 z-50 bg-red-900 border border-red-700 text-red-200 p-4 rounded-md shadow-2xl animate-fade-in max-w-md"
+          className={`absolute top-20 right-4 z-50 p-4 rounded-md shadow-2xl animate-fade-in max-w-md ${
+            error
+              ? "bg-red-900 border border-red-700 text-red-200"
+              : "bg-green-900 border border-green-700 text-green-200"
+          }`}
           role="alert"
         >
           <div className="flex items-start">
             <svg
-              className="w-5 h-5 text-red-400 mt-0.5 mr-3 flex-shrink-0"
+              className={`w-5 h-5 mt-0.5 mr-3 flex-shrink-0 ${
+                error ? "text-red-400" : "text-green-400"
+              }`}
               fill="currentColor"
               viewBox="0 0 20 20"
             >
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
+              {error ? (
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              ) : (
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              )}
             </svg>
             <div>
-              <p className="font-bold text-sm">Error</p>
-              <p className="text-sm mt-1">{error}</p>
+              <p className="font-bold text-sm">{error ? "Error" : "Success"}</p>
+              <p className="text-sm mt-1">{error || success}</p>
             </div>
             <button
-              onClick={() => setError("")}
-              className="ml-4 text-red-400 hover:text-red-200"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {success && (
-        <div className="absolute top-20 right-4 z-50 bg-green-900 border border-green-700 text-green-200 p-4 rounded-md shadow-2xl animate-fade-in max-w-md">
-          <div className="flex items-start">
-            <svg
-              className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div>
-              <p className="font-bold text-sm">Success</p>
-              <p className="text-sm mt-1">{success}</p>
-            </div>
-            <button
-              onClick={() => setSuccess("")}
-              className="ml-4 text-green-400 hover:text-green-200"
+              onClick={() => {
+                setError("");
+                setSuccess("");
+              }}
+              className={`ml-4 ${
+                error
+                  ? "text-red-400 hover:text-red-200"
+                  : "text-green-400 hover:text-green-200"
+              }`}
             >
               <CloseIcon />
             </button>
@@ -1248,23 +1389,21 @@ export default function App() {
                   No Graph Data Loaded
                 </h3>
                 <p className="text-gray-500 mb-4">
-                  Upload a JSON file or load the sample data to visualize your
-                  knowledge graph.
+                  Upload a JSON or JSON-LD file, or load the sample data to
+                  visualize your knowledge graph.
                 </p>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <p>• Supports ArchiMate and custom knowledge graph formats</p>
-                  <p>• Interactive visualization with physics simulation</p>
-                  <p>• Enterprise-ready for OneStream XF integration</p>
-                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Enhanced floating panels */}
         {graphData && (
           <DraggablePanel
-            title="Legend"
+            title={
+              graphData.metadata?.source === "JSON-LD"
+                ? `Legend - ${graphData.metadata.format}`
+                : "Legend"
+            }
             initialPosition={{ x: 20, y: 20 }}
             isOpen={isLegendOpen}
             setIsOpen={setIsLegendOpen}
@@ -1295,6 +1434,26 @@ export default function App() {
                   Total: {graphData.nodes.length} nodes,{" "}
                   {graphData.edges.length} edges
                 </p>
+                {graphData.metadata?.source === "JSON-LD" &&
+                  graphData.metadata.prefixes?.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-blue-300 hover:text-blue-200">
+                        Namespaces ({graphData.metadata.prefixes.length})
+                      </summary>
+                      <div className="mt-1 pl-2 space-y-1 max-h-20 overflow-y-auto">
+                        {graphData.metadata.prefixes.map(([prefix, uri]) => (
+                          <div key={prefix} className="text-xs">
+                            <span className="text-yellow-300 font-mono">
+                              {prefix}:
+                            </span>
+                            <span className="text-gray-400 ml-1 break-all">
+                              {uri}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
               </div>
             </div>
           </DraggablePanel>
@@ -1302,7 +1461,7 @@ export default function App() {
 
         {selectedNode && (
           <DraggablePanel
-            title={`Node: ${selectedNode.label}`}
+            title={`${selectedNode.type || "Node"}: ${selectedNode.label}`}
             initialPosition={{ x: window.innerWidth - 420, y: 20 }}
             isOpen={isDetailsOpen}
             setIsOpen={setIsDetailsOpen}
@@ -1311,23 +1470,26 @@ export default function App() {
           >
             <div className="space-y-4">
               {Object.entries(selectedNode)
-                .filter(([key]) => key !== "x" && key !== "y") // Hide position data
+                .filter(
+                  ([key]) =>
+                    !["x", "y", "vx", "vy", "fx", "fy", "index"].includes(key)
+                )
                 .map(([key, value]) => (
                   <div key={key}>
                     <p className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
                       {key.replace(/([A-Z])/g, " $1").trim()}
                     </p>
-                    <div className="text-gray-200 bg-gray-700 bg-opacity-50 p-3 rounded-md text-sm font-mono">
+                    <div className="text-gray-200 bg-gray-700 bg-opacity-50 p-3 rounded-md text-sm break-words">
                       {value === null || value === undefined ? (
                         <span className="text-gray-500 italic">
                           Not specified
                         </span>
                       ) : typeof value === "object" ? (
-                        <pre className="whitespace-pre-wrap overflow-x-auto">
+                        <pre className="whitespace-pre-wrap overflow-x-auto font-mono text-xs">
                           {JSON.stringify(value, null, 2)}
                         </pre>
                       ) : (
-                        <span className="break-words">{value.toString()}</span>
+                        <span>{value.toString()}</span>
                       )}
                     </div>
                   </div>
@@ -1339,7 +1501,7 @@ export default function App() {
         <SettingsPanel
           isOpen={isSettingsOpen}
           setIsOpen={setIsSettingsOpen}
-          onSettingsChange={handleSettingsChange}
+          onSettingsChange={setSettings}
           settings={settings}
           graphData={graphData}
         />
